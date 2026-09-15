@@ -68,7 +68,7 @@ export default function Home() {
       setStatus("result");
       if (!testText.trim()) {
         setTestText(
-          "08031234567\n08123456789\n07012345678\nhello@example.com\n2024-01-15",
+          "https://example.com\nhttp://not-secure.test\nhello@example.com\n2024-01-15\n#1a2b3c",
         );
       }
     } catch {
@@ -117,7 +117,7 @@ export default function Home() {
         />
 
         {status === "result" && pattern && (
-          <div className="space-y-8 border-t border-[var(--border)] pt-8">
+          <div className="animate-fade-in-up space-y-8 border-t border-[var(--border)] pt-8">
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--text)]">
                 Result

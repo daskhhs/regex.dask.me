@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  AiProviderError,
-  MissingApiKeyError,
-} from "@/lib/ai/provider";
 import { resolveExplanation } from "@/lib/regex-parser";
 import { compileRegex, sanitizeFlags } from "@/lib/regex-validator";
-import {
-  describeMissingKeys,
-  getConfiguredProvider,
-  getAiProvider,
-} from "@/lib/providers";
+import { MissingApiKeyError, generateRegex } from "@/lib/providers";
 import type { GenerateResponse } from "@/types/regex";
 
 export const runtime = "nodejs";
@@ -55,31 +47,18 @@ export async function POST(request: Request) {
     return NextResponse.json(payload, { status: 400 });
   }
 
-  const provider = getConfiguredProvider();
-  if (!provider) {
-    const preferred = getAiProvider();
-    const payload: GenerateResponse = {
-      ok: false,
-      error: describeMissingKeys(),
-      code: "MISSING_API_KEY",
-    };
-    console.warn(
-      `[generate] missing API key for preferred provider: ${preferred.name}`,
-    );
-    return NextResponse.json(payload, { status: 503 });
-  }
-
   try {
-    const proposal = await provider.generateRegex(description);
+    const { proposal } = await generateRegex(description);
     const flags = sanitizeFlags(proposal.flags);
     const compiled = compileRegex(proposal.pattern, flags);
 
     if (!compiled.ok) {
       const payload: GenerateResponse = {
         ok: false,
-        error: `AI proposed an invalid regex: ${compiled.error ?? "unknown error"}`,
+        error: "That description didn't produce a valid pattern. Try rephrasing it.",
         code: "INVALID_REGEX",
       };
+      console.error(`[generate] AI proposed an invalid regex: ${compiled.error ?? "unknown error"}`);
       return NextResponse.json(payload, { status: 422 });
     }
 
@@ -99,24 +78,19 @@ export async function POST(request: Request) {
     return NextResponse.json(payload);
   } catch (err) {
     if (err instanceof MissingApiKeyError) {
+      console.error("Regex builder: missing API key", err);
       const payload: GenerateResponse = {
         ok: false,
-        error: err.message,
+        error: "This tool isn't fully set up yet — please check back soon.",
         code: "MISSING_API_KEY",
       };
       return NextResponse.json(payload, { status: 503 });
     }
 
-    const message =
-      err instanceof AiProviderError
-        ? err.message
-        : err instanceof Error
-          ? err.message
-          : "Failed to generate regex.";
-
+    console.error("Regex builder: upstream error", err);
     const payload: GenerateResponse = {
       ok: false,
-      error: message,
+      error: "Couldn't build a regex from that description. Please try again in a moment.",
       code: "AI_ERROR",
     };
     return NextResponse.json(payload, { status: 502 });

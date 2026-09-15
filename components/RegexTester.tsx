@@ -19,8 +19,8 @@ export function RegexTester({ value, onChange }: RegexTesterProps) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={6}
-        placeholder={"08031234567\n08123456789\n07012345678\nnot-a-phone"}
-        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 font-mono text-sm text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
+        placeholder={"hello@example.com\nhttps://example.com\nnot-a-match"}
+        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 font-mono text-base sm:text-sm text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
       />
     </section>
   );

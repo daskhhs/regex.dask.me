@@ -1,66 +1,51 @@
-import type { RegexProposal } from "@/types/regex";
-import {
-  AiProviderError,
-  MissingApiKeyError,
-  REGEX_SYSTEM_PROMPT,
-  buildUserPrompt,
-  extractJsonObject,
-  normalizeProposal,
-  type AiProvider,
-} from "@/lib/ai/provider";
+import { AiProviderError, type ChatMessage } from "./provider";
 
-const OPENROUTER_MODEL =
-  process.env.OPENROUTER_MODEL?.trim() || "openai/gpt-4o-mini";
+// openrouter/free is OpenRouter's Free Models Router — it randomly selects
+// a free model from whatever's available and is filtered for the features
+// the request needs (e.g. structured JSON output). It's the right default
+// for a last-resort fallback provider. Override with OPENROUTER_MODEL if
+// you'd rather pin a specific (possibly paid) model.
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "openrouter/free";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-export const openrouterProvider: AiProvider = {
-  name: "openrouter",
+export async function callOpenRouter(
+  messages: ChatMessage[],
+  apiKey: string
+): Promise<string> {
+  const res = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "https://regex.dask.me",
+      "X-Title": "Human to Regex",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    }),
+  });
 
-  isConfigured() {
-    return Boolean(process.env.OPENROUTER_API_KEY?.trim());
-  },
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new AiProviderError(
+      `OpenRouter request failed (${res.status}). ${body.slice(0, 240)}`
+    );
+  }
 
-  async generateRegex(description: string): Promise<RegexProposal> {
-    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-    if (!apiKey) {
-      throw new MissingApiKeyError("openrouter", "OPENROUTER_API_KEY");
-    }
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer":
-          process.env.OPENROUTER_SITE_URL?.trim() || "https://regex.dask.me",
-        "X-Title": process.env.OPENROUTER_APP_NAME?.trim() || "Human → Regex",
-      },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: REGEX_SYSTEM_PROMPT },
-          { role: "user", content: buildUserPrompt(description) },
-        ],
-      }),
-    });
+  const text = data.choices?.[0]?.message?.content?.trim();
+  if (!text) {
+    throw new AiProviderError("OpenRouter returned an empty response.");
+  }
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new AiProviderError(
-        `OpenRouter request failed (${res.status})${body ? `: ${body.slice(0, 240)}` : ""}`,
-      );
-    }
-
-    const json = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-
-    const text = json.choices?.[0]?.message?.content?.trim();
-    if (!text) {
-      throw new AiProviderError("OpenRouter returned an empty response.");
-    }
-
-    return normalizeProposal(extractJsonObject(text));
-  },
-};
+  return text;
+}

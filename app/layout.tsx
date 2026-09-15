@@ -30,7 +30,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${body.variable} ${mono.variable} ${display.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="relative min-h-full flex flex-col font-sans">
+        <div className="atmosphere" aria-hidden="true" />
+        <div className="relative z-10 flex min-h-full flex-1 flex-col">{children}</div>
+      </body>
     </html>
   );
 }

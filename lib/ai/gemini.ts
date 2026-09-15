@@ -1,72 +1,59 @@
-import type { RegexProposal } from "@/types/regex";
-import {
-  AiProviderError,
-  MissingApiKeyError,
-  REGEX_SYSTEM_PROMPT,
-  buildUserPrompt,
-  extractJsonObject,
-  normalizeProposal,
-  type AiProvider,
-} from "@/lib/ai/provider";
+import { AiProviderError, type ChatMessage } from "./provider";
 
-const GEMINI_MODEL =
-  process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
-export const geminiProvider: AiProvider = {
-  name: "gemini",
+export async function callGemini(messages: ChatMessage[], apiKey: string): Promise<string> {
+  const system = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  const contents = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
 
-  isConfigured() {
-    return Boolean(process.env.GEMINI_API_KEY?.trim());
-  },
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-  async generateRegex(description: string): Promise<RegexProposal> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      throw new MissingApiKeyError("gemini", "GEMINI_API_KEY");
-    }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: system
+        ? { parts: [{ text: system }] }
+        : undefined,
+      contents,
+      generationConfig: {
+        temperature: 0.3,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new AiProviderError(
+      `Gemini request failed (${res.status}). ${sanitizeUpstream(body)}`
+    );
+  }
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: REGEX_SYSTEM_PROMPT }] },
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: buildUserPrompt(description) }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-        },
-      }),
-    });
+  const data = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new AiProviderError(
-        `Gemini request failed (${res.status})${body ? `: ${body.slice(0, 240)}` : ""}`,
-      );
-    }
+  const text = data.candidates?.[0]?.content?.parts
+    ?.map((p) => p.text || "")
+    .join("")
+    .trim();
 
-    const json = (await res.json()) as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
-      }>;
-    };
+  if (!text) {
+    throw new AiProviderError("Gemini returned an empty response.");
+  }
 
-    const text = json.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text ?? "")
-      .join("")
-      .trim();
+  return text;
+}
 
-    if (!text) {
-      throw new AiProviderError("Gemini returned an empty response.");
-    }
-
-    return normalizeProposal(extractJsonObject(text));
-  },
-};
+function sanitizeUpstream(body: string): string {
+  return body.replace(/key=[^&\s"']+/gi, "key=REDACTED").slice(0, 240);
+}

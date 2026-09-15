@@ -2,8 +2,8 @@
 
 const EXAMPLES = [
   {
-    label: "Nigerian phones",
-    text: "Nigerian phone numbers starting with 080, 081, 090 or 091",
+    label: "URLs",
+    text: "website URLs starting with http:// or https://",
   },
   {
     label: "Emails",
@@ -66,7 +66,7 @@ export function RegexInput({
         type="button"
         onClick={onSubmit}
         disabled={disabled || !value.trim()}
-        className="inline-flex h-11 items-center justify-center rounded-md bg-[var(--accent)] px-5 text-sm font-medium text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-11 items-center justify-center rounded-md bg-[var(--accent)] px-5 text-sm font-medium text-[var(--accent-fg)] transition duration-200 hover:bg-[var(--accent-hover)] hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-8px_var(--accent)] active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
       >
         Build my regex
       </button>
